@@ -8,3 +8,5 @@ reviewRouter.get('/:reviewId', reviewController.getReviewListDetail);
 reviewRouter.post('/upload', reviewController.createReview);
 
 module.exports = { reviewRouter };
+
+//postRouter.post('/posts/upload', loginRequired, upload.array('selectedFile'), postController.postCommunity);
