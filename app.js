@@ -15,6 +15,7 @@ const { exec } = require('child_process');
 const { promisify } = require('util');
 const execAsync = promisify(exec);
 const VideoEntity = require('./api/models/video');
+const AWS = require('aws-sdk');
 
 const app = express();
 
@@ -77,10 +78,58 @@ async function checkVideoRotation(filePath) {
   }
 }
 
+// AWS 설정
+AWS.config.update({
+  accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+  secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+  region: process.env.AWS_REGION,
+});
+
+const s3 = new AWS.S3();
+
+// S3에 파일 업로드 함수
+async function uploadToS3(filePath, fileName) {
+  console.log(`Attempting to upload file: ${filePath} to S3 as ${fileName}`);
+  try {
+    const fileContent = await fs.readFile(filePath);
+    const params = {
+      Bucket: process.env.S3_BUCKET_NAME,
+      Key: `hls/${fileName}`,
+      Body: fileContent,
+    };
+
+    console.log(`S3 upload params: ${JSON.stringify(params, null, 2)}`);
+
+    return new Promise((resolve, reject) => {
+      s3.upload(params, (err, data) => {
+        if (err) {
+          console.error(`S3 upload error for ${fileName}:`, err);
+          reject(err);
+        } else if (!data || !data.Location) {
+          console.error(
+            `S3 upload successful but no Location returned for ${fileName}`
+          );
+          reject(new Error('S3 upload successful but no Location returned'));
+        } else {
+          console.log(`S3 upload successful for ${fileName}: ${data.Location}`);
+          resolve(data.Location);
+        }
+      });
+    });
+  } catch (error) {
+    console.error(`Error reading file ${filePath}:`, error);
+    throw error;
+  }
+}
+
+// MP4 파일을 HLS로 변환하고 데이터베이스에 저장하는 기능
 // MP4 파일을 HLS로 변환하고 데이터베이스에 저장하는 기능
 const convertVideo = async () => {
-  const mp4FolderPath = path.join(__dirname, 'mp4');
-  const hlsFolderPath = path.join(__dirname, 'hls');
+  const mp4FolderPath = path.resolve(__dirname, 'mp4');
+  const hlsFolderPath = path.resolve(__dirname, 'hls');
+
+  console.log('MP4 Folder Path:', mp4FolderPath);
+  console.log('HLS Folder Path:', hlsFolderPath);
 
   // mp4와 hls 폴더가 없으면 생성
   for (const dir of [mp4FolderPath, hlsFolderPath]) {
@@ -96,6 +145,7 @@ const convertVideo = async () => {
 
   try {
     const files = await fs.readdir(mp4FolderPath);
+    console.log('Files in MP4 folder:', files);
 
     for (const file of files) {
       if (path.extname(file).toLowerCase() === '.mp4') {
@@ -103,33 +153,71 @@ const convertVideo = async () => {
         const outputFileName = path.basename(file, '.mp4');
         const outputHLSPath = path.join(hlsFolderPath, outputFileName);
 
-        const rotation = await checkVideoRotation(inputFilePath);
-        let command;
-
-        if (rotation === '90') {
-          command = `ffmpeg -i "${inputFilePath}" -vf "transpose=1" -codec:a copy -start_number 0 -hls_time 10 -hls_list_size 0 -f hls "${outputHLSPath}.m3u8"`;
-        } else {
-          command = `ffmpeg -i "${inputFilePath}" -codec:v copy -codec:a copy -start_number 0 -hls_time 10 -hls_list_size 0 -f hls "${outputHLSPath}.m3u8"`;
-        }
+        console.log('Input File Path:', inputFilePath);
+        console.log('Output HLS Path:', outputHLSPath);
 
         try {
+          await fs.mkdir(outputHLSPath, { recursive: true });
+          console.log(`Created HLS output directory: ${outputHLSPath}`);
+
+          const rotation = await checkVideoRotation(inputFilePath);
+          let command;
+
+          if (rotation === '90') {
+            command = `ffmpeg -i "${inputFilePath}" -vf "transpose=1" -codec:a copy -start_number 0 -hls_time 10 -hls_list_size 0 -f hls "${path.join(
+              outputHLSPath,
+              'index.m3u8'
+            )}"`;
+          } else {
+            command = `ffmpeg -i "${inputFilePath}" -codec:v copy -codec:a copy -start_number 0 -hls_time 10 -hls_list_size 0 -f hls "${path.join(
+              outputHLSPath,
+              'index.m3u8'
+            )}"`;
+          }
+
+          console.log('FFmpeg command:', command);
+
           const { stdout, stderr } = await execAsync(command);
           console.log('FFmpeg output:', stdout);
           if (stderr) console.error('FFmpeg stderr:', stderr);
 
-          const videoUrl = `https://store.brnana.store/hls/${encodeURIComponent(
-            outputFileName
-          )}.m3u8`;
-          const video = new VideoEntity();
-          video.video_url = videoUrl;
-          await AppDataSource.manager.save(video);
-          console.log(`Video converted and saved to DB: ${videoUrl}`);
-        } catch (error) {
-          console.error(
-            'Error during conversion or saving to DB:',
-            error.message
+          const hlsFiles = await fs.readdir(outputHLSPath);
+          console.log(`HLS files generated in ${outputHLSPath}:`, hlsFiles);
+
+          // HLS 파일들을 S3에 업로드
+          const s3Urls = await Promise.all(
+            hlsFiles.map(async (hlsFile) => {
+              const filePath = path.join(outputHLSPath, hlsFile);
+              try {
+                return await uploadToS3(
+                  filePath,
+                  `${outputFileName}/${hlsFile}`
+                );
+              } catch (error) {
+                console.error(`Failed to upload ${hlsFile} to S3:`, error);
+                return null;
+              }
+            })
           );
-          if (error.stderr) console.error('FFmpeg stderr:', error.stderr);
+
+          const videoUrl = s3Urls.find((url) => url && url.endsWith('.m3u8'));
+          if (videoUrl) {
+            const video = new VideoEntity();
+            video.video_url = videoUrl;
+            await AppDataSource.manager.save(video);
+            console.log(
+              `Video converted, uploaded to S3, and saved to DB: ${videoUrl}`
+            );
+          } else {
+            console.error('Failed to get a valid m3u8 URL from S3 uploads');
+          }
+
+          // 로컬의 HLS 파일들 삭제 (선택사항)
+          await fs.rm(outputHLSPath, { recursive: true, force: true });
+          console.log(`Removed local HLS files: ${outputHLSPath}`);
+        } catch (error) {
+          console.error('Detailed error:', error);
+          console.error('Error stack:', error.stack);
         }
       }
     }
