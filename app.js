@@ -65,19 +65,6 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'client.html'));
 });
 
-// 비디오 회전 메타데이터 확인 함수
-async function checkVideoRotation(filePath) {
-  try {
-    const { stdout } = await execAsync(
-      `ffprobe -v error -select_streams v:0 -show_entries stream_tags=rotate -of default=nw=1:nk=1 "${filePath}"`
-    );
-    return stdout.trim();
-  } catch (error) {
-    console.error('Error checking video rotation:', error);
-    return null;
-  }
-}
-
 // AWS 설정
 AWS.config.update({
   accessKeyId: process.env.AWS_ACCESS_KEY_ID,
@@ -123,7 +110,6 @@ async function uploadToS3(filePath, fileName) {
 }
 
 // MP4 파일을 HLS로 변환하고 데이터베이스에 저장하는 기능
-// MP4 파일을 HLS로 변환하고 데이터베이스에 저장하는 기능
 const convertVideo = async () => {
   const mp4FolderPath = path.resolve(__dirname, 'mp4');
   const hlsFolderPath = path.resolve(__dirname, 'hls');
@@ -160,20 +146,11 @@ const convertVideo = async () => {
           await fs.mkdir(outputHLSPath, { recursive: true });
           console.log(`Created HLS output directory: ${outputHLSPath}`);
 
-          const rotation = await checkVideoRotation(inputFilePath);
-          let command;
-
-          if (rotation === '90') {
-            command = `ffmpeg -i "${inputFilePath}" -vf "transpose=1" -codec:a copy -start_number 0 -hls_time 10 -hls_list_size 0 -f hls "${path.join(
-              outputHLSPath,
-              'index.m3u8'
-            )}"`;
-          } else {
-            command = `ffmpeg -i "${inputFilePath}" -codec:v copy -codec:a copy -start_number 0 -hls_time 10 -hls_list_size 0 -f hls "${path.join(
-              outputHLSPath,
-              'index.m3u8'
-            )}"`;
-          }
+          // 회전 정보에 관계없이 항상 원본 그대로 변환
+          const command = `ffmpeg -i "${inputFilePath}" -codec:v libx264 -codec:a aac -start_number 0 -hls_time 10 -hls_list_size 0 -f hls "${path.join(
+            outputHLSPath,
+            'index.m3u8'
+          )}"`;
 
           console.log('FFmpeg command:', command);
 
