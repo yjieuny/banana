@@ -147,7 +147,7 @@ const convertVideo = async () => {
           console.log(`Created HLS output directory: ${outputHLSPath}`);
 
           // 회전 정보에 관계없이 항상 원본 그대로 변환
-          const command = `ffmpeg -i "${inputFilePath}" -codec:v libx264 -codec:a aac -start_number 0 -hls_time 10 -hls_list_size 0 -f hls "${path.join(
+          const command = `ffmpeg -i "${inputFilePath}" -an -codec:v libx264 -start_number 0 -hls_time 10 -hls_list_size 0 -f hls "${path.join(
             outputHLSPath,
             'index.m3u8'
           )}"`;
