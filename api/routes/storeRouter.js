@@ -4,5 +4,9 @@ const storeRouter = express.Router();
 
 storeRouter.get('/all', storeController.getAllStores);
 storeRouter.get('/all/nearest', storeController.getAllStoresNearest);
+storeRouter.get(
+  '/all/recommendation',
+  storeController.getAllStoresRecommendation
+);
 
 module.exports = { storeRouter };
