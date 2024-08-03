@@ -1,8 +1,8 @@
 const { AppDataSource } = require('./dataSource');
 
-const getStoresAndReviews = async () => {
+const getAllStoresAndReviews = async () => {
   try {
-    const storesAndReviews = await AppDataSource.query(`
+    const allStores = await AppDataSource.query(`
       SELECT
           stores.id AS storeId,
           stores.name AS storeName,
@@ -11,6 +11,7 @@ const getStoresAndReviews = async () => {
           stores.lat,
           stores.lng,
           store_reviews.id AS reviewId,
+          store_reviews.rating,
           store_reviews.text_review AS textReview,
           store_reviews.video_url AS videoReviewUrl,
           categories.name AS category
@@ -22,11 +23,47 @@ const getStoresAndReviews = async () => {
           categories ON stores.category_id = categories.id;
     `);
 
-    return storesAndReviews;
+    return allStores;
   } catch (error) {
     console.error('Error executing getStoresAndReviews query:', error);
     throw new Error('Error fetching stores and reviews data');
   }
 };
 
-module.exports = { getStoresAndReviews };
+const getAllStoresClosestAndReviews = async (lat, lng) => {
+  try {
+    const closestStores = await AppDataSource.query(
+      `
+      SELECT
+          stores.id AS storeId,
+          stores.name AS storeName,
+          stores.opening_hours AS openingHours,
+          stores.address,
+          stores.lat,
+          stores.lng,
+          store_reviews.id AS reviewId,
+          store_reviews.rating,
+          store_reviews.text_review AS textReview,
+          store_reviews.video_url AS videoReviewUrl,
+          categories.name AS category,
+          ST_Distance_Sphere(point(stores.lng, stores.lat), point(?, ?)) AS distance
+      FROM
+          stores
+      LEFT JOIN
+          store_reviews ON stores.id = store_reviews.store_id
+      LEFT JOIN
+          categories ON stores.category_id = categories.id
+      ORDER BY
+          distance ASC
+    `,
+      [lng, lat]
+    );
+
+    return closestStores;
+  } catch (error) {
+    console.error('Error executing getAllStoresAndReviews query:', error);
+    throw new Error('Error fetching stores and reviews data');
+  }
+};
+
+module.exports = { getAllStoresAndReviews, getAllStoresClosestAndReviews };
