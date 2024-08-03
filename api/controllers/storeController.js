@@ -7,7 +7,7 @@ const getAllStores = catchAsync(async (req, res) => {
   res.status(200).json({ data: store });
 });
 
-const getAllStoresClosest = catchAsync(async (req, res) => {
+const getAllStoresNearest = catchAsync(async (req, res) => {
   const lat = req.header('X-Latitude');
   const lng = req.header('X-Longitude');
 
@@ -17,11 +17,11 @@ const getAllStoresClosest = catchAsync(async (req, res) => {
       .json({ error: 'Latitude and longitude are required in headers' });
   }
 
-  const stores = await storeDao.getAllStoresClosestAndReviews(
+  const stores = await storeDao.getAllStoresNearestAndReviews(
     parseFloat(lat),
     parseFloat(lng)
   );
   res.status(200).json({ data: stores });
 });
 
-module.exports = { getAllStores, getAllStoresClosest };
+module.exports = { getAllStores, getAllStoresNearest };

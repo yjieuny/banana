@@ -30,9 +30,9 @@ const getAllStoresAndReviews = async () => {
   }
 };
 
-const getAllStoresClosestAndReviews = async (lat, lng) => {
+const getAllStoresNearestAndReviews = async (lat, lng) => {
   try {
-    const closestStores = await AppDataSource.query(
+    const nearestStores = await AppDataSource.query(
       `
       SELECT
           stores.id AS storeId,
@@ -59,11 +59,11 @@ const getAllStoresClosestAndReviews = async (lat, lng) => {
       [lng, lat]
     );
 
-    return closestStores;
+    return nearestStores;
   } catch (error) {
     console.error('Error executing getAllStoresAndReviews query:', error);
     throw new Error('Error fetching stores and reviews data');
   }
 };
 
-module.exports = { getAllStoresAndReviews, getAllStoresClosestAndReviews };
+module.exports = { getAllStoresAndReviews, getAllStoresNearestAndReviews };
