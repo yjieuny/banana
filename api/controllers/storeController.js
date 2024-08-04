@@ -8,8 +8,8 @@ const getAllStores = catchAsync(async (req, res) => {
 });
 
 const getAllStoresNearest = catchAsync(async (req, res) => {
-  const lat = req.header('Latitude');
-  const lng = req.header('Longitude');
+  const lat = req.header('lat');
+  const lng = req.header('lng');
 
   if (!lat || !lng) {
     return res
@@ -25,8 +25,8 @@ const getAllStoresNearest = catchAsync(async (req, res) => {
 });
 
 const getAllStoresRecommendation = catchAsync(async (req, res) => {
-  const lat = req.header('Latitude');
-  const lng = req.header('Longitude');
+  const lat = req.header('lat');
+  const lng = req.header('lng');
 
   if (!lat || !lng) {
     return res
