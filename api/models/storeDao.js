@@ -10,13 +10,9 @@ const getAllStoresAndReviews = async () => {
           stores.address,
           stores.lat,
           stores.lng,
-          JSON_ARRAYAGG(
-            JSON_OBJECT(
-              'reviewId', store_reviews.id,
-              'textReview', store_reviews.text_review,
-              'videoReviewUrl', store_reviews.video_url
-            )
-          ) AS reviews,
+          store_reviews.id AS reviewId,
+          store_reviews.text_review AS textReview,
+          store_reviews.video_url AS videoReviewUrl,
           categories.name AS category
       FROM
           stores
@@ -24,16 +20,11 @@ const getAllStoresAndReviews = async () => {
           store_reviews ON stores.id = store_reviews.store_id
       LEFT JOIN
           categories ON stores.category_id = categories.id
-      GROUP BY
-          stores.id
       ORDER BY
-          RAND()
-    `);
+          RAND();
 
-    return allStores.map((store) => ({
-      ...store,
-      reviews: store.reviews ? JSON.parse(store.reviews) : [],
-    }));
+    `);
+    return allStores;
   } catch (error) {
     console.error('Error executing getAllStoresAndReviews query:', error);
     throw new Error('Error fetching stores and reviews data');
@@ -51,13 +42,9 @@ const getAllStoresNearestAndReviews = async (lat, lng) => {
           stores.address,
           stores.lat,
           stores.lng,
-          JSON_ARRAYAGG(
-            JSON_OBJECT(
-              'reviewId', store_reviews.id,
-              'textReview', store_reviews.text_review,
-              'videoReviewUrl', store_reviews.video_url
-            )
-          ) AS reviews,
+          store_reviews.id AS reviewId,
+          store_reviews.text_review AS textReview,
+          store_reviews.video_url AS videoReviewUrl,
           categories.name AS category,
           ST_Distance_Sphere(point(stores.lng, stores.lat), point(?, ?)) AS distance
       FROM
@@ -66,18 +53,13 @@ const getAllStoresNearestAndReviews = async (lat, lng) => {
           store_reviews ON stores.id = store_reviews.store_id
       LEFT JOIN
           categories ON stores.category_id = categories.id
-      GROUP BY
-          stores.id
       ORDER BY
           distance ASC
     `,
       [lng, lat]
     );
 
-    return nearestStores.map((store) => ({
-      ...store,
-      reviews: store.reviews ? JSON.parse(store.reviews) : [],
-    }));
+    return nearestStores;
   } catch (error) {
     console.error('Error executing getAllStoresAndReviews query:', error);
     throw new Error('Error fetching stores and reviews data');
@@ -95,15 +77,10 @@ const getAllStoresRecommendationAndReviews = async (lat, lng) => {
           stores.address,
           stores.lat,
           stores.lng,
-          ROUND(AVG(store_reviews.rating), 1) AS rating,
-          JSON_ARRAYAGG(
-            JSON_OBJECT(
-              'reviewId', store_reviews.id,
-              'rating', store_reviews.rating,
-              'textReview', store_reviews.text_review,
-              'videoReviewUrl', store_reviews.video_url
-            )
-          ) AS reviews,
+          store_reviews.id AS reviewId,
+          ROUND(AVG(store_reviews.rating), 1) AS rating,          
+          store_reviews.text_review AS textReview,
+          store_reviews.video_url AS videoReviewUrl,
           categories.name AS category,
           ST_Distance_Sphere(point(stores.lng, stores.lat), point(?, ?)) AS distance
       FROM
@@ -113,7 +90,7 @@ const getAllStoresRecommendationAndReviews = async (lat, lng) => {
       LEFT JOIN
           categories ON stores.category_id = categories.id
       GROUP BY
-          stores.id
+          stores.id, store_reviews.id, categories.id
       ORDER BY
           rating DESC,
           distance ASC
@@ -123,8 +100,8 @@ const getAllStoresRecommendationAndReviews = async (lat, lng) => {
 
     return recommendedStores.map((store) => ({
       ...store,
-      rating: parseFloat(store.rating),
-      reviews: JSON.parse(store.reviews),
+      rating: store.rating ? parseFloat(store.rating) : null,
+      distance: parseFloat(store.distance),
     }));
   } catch (error) {
     console.error(
