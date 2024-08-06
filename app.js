@@ -55,10 +55,10 @@ const hls = new HLSServer(server, {
   },
 });
 
-const hlsPORT = 8000;
-server.listen(hlsPORT, () => {
-  console.log(`The HLS server is running on port ${hlsPORT}`);
-});
+// const hlsPORT = 8000;
+// server.listen(hlsPORT, () => {
+//   console.log(`The HLS server is running on port ${hlsPORT}`);
+// });
 
 // 기본 경로에서 HLS 서버 실행
 app.get('/', (req, res) => {
